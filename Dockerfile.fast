@@ -22,10 +22,9 @@ WORKDIR /app
 COPY . /app
 
 # Install browser-use
-RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+RUN --mount=type=cache,target=/root/.cache/uv,id=railway-fast-cache \
     uv sync --all-extras --locked --no-dev --compile-bytecode
 
 USER "$BROWSERUSE_USER"
-VOLUME "$DATA_DIR"
 EXPOSE 9242 9222
 ENTRYPOINT ["browser-use"]
