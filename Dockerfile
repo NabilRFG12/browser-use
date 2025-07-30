@@ -114,28 +114,13 @@ RUN echo "[*] Setting up $BROWSERUSE_USER user uid=${DEFAULT_PUID}..." \
     # https://docs.linuxserver.io/general/understanding-puid-and-pgid
 
 # Install base apt dependencies (adding backports to access more recent apt updates)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=browseruse-apt \
     echo "[+] Installing APT base system dependencies for $TARGETPLATFORM..." \
-#     && echo 'deb https://deb.debian.org/debian bookworm-backports main contrib non-free' > /etc/apt/sources.list.d/backports.list \
     && mkdir -p /etc/apt/keyrings \
     && apt-get update -qq \
     && apt-get install -qq -y --no-install-recommends \
-        # 1. packaging dependencies
         apt-transport-https ca-certificates apt-utils gnupg2 unzip curl wget grep \
-        # 2. docker and init system dependencies:
-        # dumb-init gosu cron zlib1g-dev \
-        # 3. frivolous CLI helpers to make debugging failed archiving easierL
         nano iputils-ping dnsutils jq \
-        # tree yq procps \
-        # 4. browser dependencies: (auto-installed by playwright install --with-deps chromium)
-     #    libnss3 libxss1 libasound2 libx11-xcb1 \
-     #    fontconfig fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros fonts-kacst fonts-symbola fonts-noto fonts-freefont-ttf \
-     #    at-spi2-common fonts-liberation fonts-noto-color-emoji fonts-tlwg-loma-otf fonts-unifont libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libavahi-client3 \
-     #    libavahi-common-data libavahi-common3 libcups2 libfontenc1 libice6 libnspr4 libnss3 libsm6 libunwind8 \
-     #    libxaw7 libxcomposite1 libxdamage1 libxfont2 \
-     #    # 5. x11/xvfb dependencies:
-     #    libxkbfile1 libxmu6 libxpm4 libxt6 x11-xkb-utils x11-utils xfonts-encodings \
-     #    xfonts-scalable xfonts-utils xserver-common xvfb \
      && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -144,7 +129,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock* /app/
 
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache1 \
     echo "[+] Setting up venv using uv in $VENV_DIR..." \
     && ( \
      which uv && uv --version \
@@ -154,7 +139,7 @@ RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$T
     ) | tee -a /VERSION.txt
 
 # Install playwright using pip (with version from pyproject.toml)
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache2 \
      echo "[+] Installing playwright via pip using version from pyproject.toml..." \
      && ( \
         PLAYWRIGHT_VERSION=$(grep -E "playwright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
@@ -167,12 +152,11 @@ RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$T
      ) | tee -a /VERSION.txt
 
 # Install Chromium using playwright
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-$TARGETARCH$TARGETVARIANT \
-    --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=browseruse-apt2 \
+    --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache3 \
     echo "[+] Installing chromium apt pkgs and binary to /root/.cache/ms-playwright..." \
     && apt-get update -qq \
     && playwright install --with-deps --no-shell chromium \
-    # && playwright install --with-deps chrome \
     && rm -rf /var/lib/apt/lists/* \
     && export CHROME_BINARY="$(python -c 'from playwright.sync_api import sync_playwright; print(sync_playwright().start().chromium.executable_path)')" \
     && ln -s "$CHROME_BINARY" /usr/bin/chromium-browser \
@@ -184,7 +168,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-$TARGETARCH$T
         && echo -e '\n\n' \
     ) | tee -a /VERSION.txt
 
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache4 \
      echo "[+] Installing browser-use pip sub-dependencies..." \
      && ( \
         uv sync --all-extras --no-dev --no-install-project \
@@ -195,7 +179,7 @@ RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$T
 COPY . /app
 
 # Install the browser-use package and all of its optional dependencies
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=cache-$TARGETARCH$TARGETVARIANT \
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache5 \
      echo "[+] Installing browser-use pip library from source..." \
      && ( \
         uv sync --all-extras --locked --no-dev \
