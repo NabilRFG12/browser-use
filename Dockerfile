@@ -1,21 +1,4 @@
 # syntax=docker/dockerfile:1
-# check=skip=SecretsUsedInArgOrEnv
-
-# This is the Dockerfile for browser-use, it bundles the following dependencies:
-#     python3, pip, playwright, chromium, browser-use and its dependencies.
-# Usage:
-#     git clone https://github.com/browser-use/browser-use.git && cd browser-use
-#     docker build . -t browseruse --no-cache
-#     docker run -v "$PWD/data":/data browseruse
-#     docker run -v "$PWD/data":/data browseruse --version
-# Multi-arch build:
-#     docker buildx create --use
-#     docker buildx build . --platform=linux/amd64,linux/arm64--push -t browseruse/browseruse:some-tag
-#
-# Read more: https://docs.browser-use.com
-
-#########################################################################################
-
 
 FROM python:3.12-slim
 
@@ -23,28 +6,13 @@ LABEL name="browseruse" \
     maintainer="Nick Sweeting <dockerfile@browser-use.com>" \
     description="Make websites accessible for AI agents. Automate tasks online with ease." \
     homepage="https://github.com/browser-use/browser-use" \
-    documentation="https://docs.browser-use.com" \
-    org.opencontainers.image.title="browseruse" \
-    org.opencontainers.image.vendor="browseruse" \
-    org.opencontainers.image.description="Make websites accessible for AI agents. Automate tasks online with ease." \
-    org.opencontainers.image.source="https://github.com/browser-use/browser-use" \
-    com.docker.image.source.entrypoint="Dockerfile" \
-    com.docker.desktop.extension.api.version=">= 1.4.7" \
-    com.docker.desktop.extension.icon="https://avatars.githubusercontent.com/u/192012301?s=200&v=4" \
-    com.docker.extension.publisher-url="https://browser-use.com" \
-    com.docker.extension.screenshots='[{"alt": "Screenshot of CLI splashscreen", "url": "https://github.com/user-attachments/assets/3606d851-deb1-439e-ad90-774e7960ded8"}, {"alt": "Screenshot of CLI running", "url": "https://github.com/user-attachments/assets/d018b115-95a4-4ac5-8259-b750bc5f56ad"}]' \
-    com.docker.extension.detailed-description='See here for detailed documentation: https://docs.browser-use.com' \
-    com.docker.extension.changelog='See here for release notes: https://github.com/browser-use/browser-use/releases' \
-    com.docker.extension.categories='web,utility-tools,ai'
+    documentation="https://docs.browser-use.com"
 
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 
-######### Environment Variables #################################
-
-# Global system-level config
 ENV TZ=UTC \
     LANGUAGE=en_US:en \
     LC_ALL=C.UTF-8 \
@@ -59,47 +27,25 @@ ENV TZ=UTC \
     UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_PREFERENCE=only-system \
     npm_config_loglevel=error \
-    IN_DOCKER=True
-
-# User config
-ENV BROWSERUSE_USER="browseruse" \
+    IN_DOCKER=True \
+    BROWSERUSE_USER="browseruse" \
     DEFAULT_PUID=911 \
-    DEFAULT_PGID=911
-
-# Paths
-ENV CODE_DIR=/app \
+    DEFAULT_PGID=911 \
+    CODE_DIR=/app \
     DATA_DIR=/data \
     VENV_DIR=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
 
-# Build shell config
 SHELL ["/bin/bash", "-o", "pipefail", "-o", "errexit", "-o", "errtrace", "-o", "nounset", "-c"] 
 
-# Force apt to leave downloaded binaries in /var/cache/apt (massively speeds up Docker builds)
 RUN echo 'Binary::apt::APT::Keep-Downloaded-Packages "1";' > /etc/apt/apt.conf.d/99keep-cache \
     && echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/99no-intall-recommends \
     && echo 'APT::Install-Suggests "0";' > /etc/apt/apt.conf.d/99no-intall-suggests \
     && rm -f /etc/apt/apt.conf.d/docker-clean
 
-# Print debug info about build and save it to disk, for human eyes only, not used by anything else
-RUN (echo "[i] Docker build for Browser Use $(cat /VERSION.txt) starting..." \
-    && echo "PLATFORM=${TARGETPLATFORM} ARCH=$(uname -m) ($(uname -s) ${TARGETARCH} ${TARGETVARIANT})" \
-    && echo "BUILD_START_TIME=$(date +"%Y-%m-%d %H:%M:%S %s") TZ=${TZ} LANG=${LANG}" \
-    && echo \
-    && echo "CODE_DIR=${CODE_DIR} DATA_DIR=${DATA_DIR} PATH=${PATH}" \
-    && echo \
-    && uname -a \
-    && cat /etc/os-release | head -n7 \
-    && which bash && bash --version | head -n1 \
-    && which dpkg && dpkg --version | head -n1 \
-    && echo -e '\n\n' && env && echo -e '\n\n' \
-    && which python && python --version \
-    && which pip && pip --version \
-    && echo -e '\n\n' \
-    ) | tee -a /VERSION.txt
+RUN (echo "[i] Docker build starting..." && uname -a)
 
-# Create non-privileged user for browseruse and chrome
-RUN echo "[*] Setting up $BROWSERUSE_USER user uid=${DEFAULT_PUID}..." \
+RUN echo "[*] Setting up $BROWSERUSE_USER user..." \
     && groupadd --system $BROWSERUSE_USER \
     && useradd --system --create-home --gid $BROWSERUSE_USER --groups audio,video $BROWSERUSE_USER \
     && usermod -u "$DEFAULT_PUID" "$BROWSERUSE_USER" \
@@ -107,15 +53,11 @@ RUN echo "[*] Setting up $BROWSERUSE_USER user uid=${DEFAULT_PUID}..." \
     && mkdir -p /data \
     && mkdir -p /home/$BROWSERUSE_USER/.config \
     && chown -R $BROWSERUSE_USER:$BROWSERUSE_USER /home/$BROWSERUSE_USER \
-    && ln -s $DATA_DIR /home/$BROWSERUSE_USER/.config/browseruse \
-    && echo -e "\nBROWSERUSE_USER=$BROWSERUSE_USER PUID=$(id -u $BROWSERUSE_USER) PGID=$(id -g $BROWSERUSE_USER)\n\n" \
-    | tee -a /VERSION.txt
-    # DEFAULT_PUID and DEFAULT_PID are overridden by PUID and PGID in /bin/docker_entrypoint.sh at runtime
-    # https://docs.linuxserver.io/general/understanding-puid-and-pgid
+    && ln -s $DATA_DIR /home/$BROWSERUSE_USER/.config/browseruse
 
-# Install base apt dependencies (adding backports to access more recent apt updates)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=browseruse-apt \
-    echo "[+] Installing APT base system dependencies for $TARGETPLATFORM..." \
+# Install base apt dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=railway-apt-cache \
+    echo "[+] Installing APT base system dependencies..." \
     && mkdir -p /etc/apt/keyrings \
     && apt-get update -qq \
     && apt-get install -qq -y --no-install-recommends \
@@ -125,83 +67,49 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=browseruse-apt \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy only dependency manifest
 WORKDIR /app
 COPY pyproject.toml uv.lock* /app/
 
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache1 \
-    echo "[+] Setting up venv using uv in $VENV_DIR..." \
-    && ( \
-     which uv && uv --version \
-     && uv venv \
-     && which python | grep "$VENV_DIR" \
-     && python --version \
-    ) | tee -a /VERSION.txt
+# Setup venv
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-venv-cache \
+    echo "[+] Setting up venv using uv..." \
+    && uv venv
 
-# Install playwright using pip (with version from pyproject.toml)
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache2 \
-     echo "[+] Installing playwright via pip using version from pyproject.toml..." \
-     && ( \
-        PLAYWRIGHT_VERSION=$(grep -E "playwright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
-        && PATCHRIGHT_VERSION=$(grep -E "patchright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
-        && echo "Installing playwright==$PLAYWRIGHT_VERSION patchright==$PATCHRIGHT_VERSION" \
-        && uv pip install playwright==$PLAYWRIGHT_VERSION patchright==$PATCHRIGHT_VERSION \
-        && which playwright \
-        && playwright --version \
-        && echo -e '\n\n' \
-     ) | tee -a /VERSION.txt
+# Install playwright
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-playwright-pip-cache \
+     echo "[+] Installing playwright via pip..." \
+     && PLAYWRIGHT_VERSION=$(grep -E "playwright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
+     && PATCHRIGHT_VERSION=$(grep -E "patchright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
+     && uv pip install playwright==$PLAYWRIGHT_VERSION patchright==$PATCHRIGHT_VERSION
 
 # Install Chromium using playwright
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=browseruse-apt2 \
-    --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache3 \
-    echo "[+] Installing chromium apt pkgs and binary to /root/.cache/ms-playwright..." \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=railway-chromium-apt-cache \
+    --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-chromium-playwright-cache \
+    echo "[+] Installing chromium..." \
     && apt-get update -qq \
     && playwright install --with-deps --no-shell chromium \
     && rm -rf /var/lib/apt/lists/* \
     && export CHROME_BINARY="$(python -c 'from playwright.sync_api import sync_playwright; print(sync_playwright().start().chromium.executable_path)')" \
-    && ln -s "$CHROME_BINARY" /usr/bin/chromium-browser \
-    && ln -s "$CHROME_BINARY" /app/chromium-browser \
-    && mkdir -p "/home/${BROWSERUSE_USER}/.config/chromium/Crash Reports/pending/" \
-    && chown -R "$BROWSERUSE_USER:$BROWSERUSE_USER" "/home/${BROWSERUSE_USER}/.config" \
-    && ( \
-        which chromium-browser && /usr/bin/chromium-browser --version \
-        && echo -e '\n\n' \
-    ) | tee -a /VERSION.txt
+    && ln -s "$CHROME_BINARY" /usr/bin/chromium-browser
 
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache4 \
+# Install browser-use sub-dependencies
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-subdep-cache \
      echo "[+] Installing browser-use pip sub-dependencies..." \
-     && ( \
-        uv sync --all-extras --no-dev --no-install-project \
-        && echo -e '\n\n' \
-     ) | tee -a /VERSION.txt
+     && uv sync --all-extras --no-dev --no-install-project
 
 # Copy the rest of the browser-use codebase
 COPY . /app
 
-# Install the browser-use package and all of its optional dependencies
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=browseruse-cache5 \
+# Install the browser-use package itself
+RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-main-install-cache \
      echo "[+] Installing browser-use pip library from source..." \
-     && ( \
-        uv sync --all-extras --locked --no-dev \
-        && which browser-use \
-        && browser-use --version 2>&1 \
-        && echo -e '\n\n' \
-     ) | tee -a /VERSION.txt
+     && uv sync --all-extras --locked --no-dev
 
 RUN mkdir -p "$DATA_DIR/profiles/default" \
-    && chown -R $BROWSERUSE_USER:$BROWSERUSE_USER "$DATA_DIR" "$DATA_DIR"/* \
-    && ( \
-        echo -e "\n\n[√] Finished Docker build successfully. Saving build summary in: /VERSION.txt" \
-        && echo -e "PLATFORM=${TARGETPLATFORM} ARCH=$(uname -m) ($(uname -s) ${TARGETARCH} ${TARGETVARIANT})\n" \
-        && echo -e "BUILD_END_TIME=$(date +"%Y-%m-%d %H:%M:%S %s")\n\n" \
-    ) | tee -a /VERSION.txt
-
+    && chown -R $BROWSERUSE_USER:$BROWSERUSE_USER "$DATA_DIR"
 
 USER "$BROWSERUSE_USER"
 EXPOSE 9242
 EXPOSE 9222
-
-# HEALTHCHECK --interval=30s --timeout=20s --retries=15 \
-#     CMD curl --silent 'http://localhost:8000/health/' | grep -q 'OK'
 
 ENTRYPOINT ["browser-use"]
