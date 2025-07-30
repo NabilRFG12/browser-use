@@ -56,7 +56,7 @@ RUN echo "[*] Setting up $BROWSERUSE_USER user..." \
     && ln -s $DATA_DIR /home/$BROWSERUSE_USER/.config/browseruse
 
 # Install base apt dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=railway-apt-cache \
+RUN --mount=type=cache,target=/var/cache/apt,id=railway-apt-cache \
     echo "[+] Installing APT base system dependencies..." \
     && mkdir -p /etc/apt/keyrings \
     && apt-get update -qq \
@@ -71,20 +71,20 @@ WORKDIR /app
 COPY pyproject.toml uv.lock* /app/
 
 # Setup venv
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-venv-cache \
+RUN --mount=type=cache,target=/root/.cache,id=railway-venv-cache \
     echo "[+] Setting up venv using uv..." \
     && uv venv
 
 # Install playwright
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-playwright-pip-cache \
+RUN --mount=type=cache,target=/root/.cache,id=railway-playwright-pip-cache \
      echo "[+] Installing playwright via pip..." \
      && PLAYWRIGHT_VERSION=$(grep -E "playwright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
      && PATCHRIGHT_VERSION=$(grep -E "patchright>=" pyproject.toml | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1) \
      && uv pip install playwright==$PLAYWRIGHT_VERSION patchright==$PATCHRIGHT_VERSION
 
 # Install Chromium using playwright
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=railway-chromium-apt-cache \
-    --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-chromium-playwright-cache \
+RUN --mount=type=cache,target=/var/cache/apt,id=railway-chromium-apt-cache \
+    --mount=type=cache,target=/root/.cache,id=railway-chromium-playwright-cache \
     echo "[+] Installing chromium..." \
     && apt-get update -qq \
     && playwright install --with-deps --no-shell chromium \
@@ -93,7 +93,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=railway-chromium-
     && ln -s "$CHROME_BINARY" /usr/bin/chromium-browser
 
 # Install browser-use sub-dependencies
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-subdep-cache \
+RUN --mount=type=cache,target=/root/.cache,id=railway-subdep-cache \
      echo "[+] Installing browser-use pip sub-dependencies..." \
      && uv sync --all-extras --no-dev --no-install-project
 
@@ -101,7 +101,7 @@ RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-subdep-cach
 COPY . /app
 
 # Install the browser-use package itself
-RUN --mount=type=cache,target=/root/.cache,sharing=locked,id=railway-main-install-cache \
+RUN --mount=type=cache,target=/root/.cache,id=railway-main-install-cache \
      echo "[+] Installing browser-use pip library from source..." \
      && uv sync --all-extras --locked --no-dev
 
