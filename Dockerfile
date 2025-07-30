@@ -1,5 +1,5 @@
 #
-# A simplified, Railway-compatible Dockerfile for browser-use
+# Final Railway-compatible Dockerfile for browser-use
 #
 # syntax=docker/dockerfile:1
 
@@ -38,21 +38,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/
 # Set the working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock* /app/
-
-# Install Python dependencies using uv
-RUN uv sync --all-extras --no-dev
-
-# Install Playwright and Chromium browser
-# This is a critical step that also installs necessary system dependencies
-RUN playwright install --with-deps chromium
-
-# Copy the rest of the application code
+# ---- FIX: Copy ALL application code BEFORE installing dependencies ----
 COPY . /app/
 
-# Re-run uv sync to install the browser-use package itself from the copied code
-RUN uv sync --all-extras --locked --no-dev
+# Install Python dependencies AND the browser-use package itself
+RUN uv sync --all-extras --no-dev
+
+# Install Playwright and Chromium browser (and its system dependencies)
+RUN playwright install --with-deps chromium
 
 # Change ownership of the app and data directories to the non-root user
 RUN chown -R $BROWSERUSE_USER:$BROWSERUSE_USER /app $DATA_DIR
