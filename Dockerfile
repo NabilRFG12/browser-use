@@ -38,7 +38,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/
 # Set the working directory
 WORKDIR /app
 
-# ---- FIX: Copy ALL application code BEFORE installing dependencies ----
+# Copy ALL application code BEFORE installing dependencies
 COPY . /app/
 
 # Install Python dependencies AND the browser-use package itself
@@ -56,5 +56,18 @@ USER $BROWSERUSE_USER
 # Expose the application port
 EXPOSE 3000
 
-# Set the default command to run when the container starts
-ENTRYPOINT ["browser-use"]
+# ---- THE FIX: Run the application in server mode ----
+ENTRYPOINT ["browser-use", "--mcp"]```
+
+### What to Do Now
+
+1.  **Update the `Dockerfile`** on your GitHub repository with the complete code block above.
+2.  **Commit the change.** Railway will automatically start a new deployment.
+3.  **Watch the new logs.** This time, you should not see the `Enter your task...` loop. The logs will likely show some startup messages and then go quiet, which is a sign that the server is successfully running and waiting for connections.
+4.  Once the deployment is `ACTIVE`, **run your local command again**:
+
+    ```bash
+    websocat "wss://browser-use-production-ccc0.up.railway.app?token=bu_-WzxJx_LfbRyiLLVND2-sVb14r2GHS--SE4eMOLxxos" | browser-use --mcp -p "go to wikipedia.org and tell me the main headline"
+    ```
+
+This aligns the server's startup command with its role as a backend service. The 502 error will be resolved, and your connection will finally succeed.
